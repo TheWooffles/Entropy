@@ -12,7 +12,7 @@ local Entropy = {
         Mode       = "Fov", -- "Fov" | "NoFov"
         Type       = "Mouse", -- "Mouse" | "Camera"
 		Radius     = 70,
-		Smoothness = 0.2,
+		Smoothness = 0.3,
         Prediction = 0,
     },
     Whitelist = {
@@ -29,7 +29,7 @@ local Entropy = {
     dev    = false,
 }
 _G.Entropy = Entropy
-
+loadstring(game:HttpGet('https://raw.githubusercontent.com/TheWooffles/Entropy/main/Src/Esp.lua'))()
 --// Services & Variables
 local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")

@@ -28,9 +28,9 @@ if game.PlaceId == 2788229376 then
     print("Entropy | Bypassed Anti-Cheat!")
 end
 
-if game.PlaceId == 155615604 then
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/TheWooffles/Entropy/main/Src/PLGuns.lua'))()
-end
+-- if game.PlaceId == 155615604 then
+--     loadstring(game:HttpGet('https://raw.githubusercontent.com/TheWooffles/Entropy/main/Src/PLGuns.lua'))()
+-- end
 
 loadstring(game:HttpGet('https://raw.githubusercontent.com/TheWooffles/Entropy/main/Src/Entropy.lua'))()
 loadstring(game:HttpGet('https://raw.githubusercontent.com/TheWooffles/Entropy/main/Src/Esp.lua'))()
