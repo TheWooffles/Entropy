@@ -1,11 +1,16 @@
 if _G.Entropy then
     local TempEntropy = _G.Entropy
-    if TempEntropy.loaded == true then
-        return warn("Entropy | Already Loaded!")
+    if TempEntropy.dev == true then
+        _G.UnloadEntropy()
+        return warn("Entropy | Development Mode ON")
+    elseif TempEntropy.dev == false then
+        if TempEntropy.loaded == true then
+            return warn("Entropy | Already Loaded!")
+        end
     end
 end
 
-_G.Entropy = {
+local Entropy = {
     Mouselock = {
         Enabled    = false,
         TeamCheck  = true,
@@ -26,7 +31,7 @@ _G.Entropy = {
     loaded = false
     dev    = false
 }
-local Entropy = _G.Entropy
+_G.Entropy = Entropy
 
 --// Services & Variables
 local Players          = game:GetService("Players")
