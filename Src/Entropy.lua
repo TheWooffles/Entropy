@@ -15,6 +15,11 @@ local Entropy = {
 		Smoothness = 0.2,
         Prediction = 0,
     },
+    Whitelist = {
+        Enabled = true,
+        Players = {"ggtm"}, -- Add display names here (case-sensitive)
+    },
+
 
     drawings    = {},
     connections = {},
@@ -32,7 +37,6 @@ local RunService       = game:GetService("RunService")
 local LocalPlayer      = Players.LocalPlayer
 local Camera           = workspace.CurrentCamera
 
-
 --// User Interface
 Entropy.drawings.Cursor = Drawing.new("Circle")
 Entropy.drawings.Cursor.Position = Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
@@ -49,6 +53,24 @@ local function isPlayerAlive(player)
     if not player or not player.Character then return false end
     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
     return humanoid and humanoid.Health > 0
+end
+
+local function getPredictedPosition(targetPart)
+    local position = targetPart.Position
+    local velocity = targetPart.AssemblyLinearVelocity or Vector3.new(0, 0, 0)
+    local predictionTime = Entropy.MouseLock.Prediction
+    
+    return position + (velocity * predictionTime)
+end
+
+local function isWhitelisted(player)
+    if not Entropy.Whitelist.Enabled then return false end
+    for _, whitelistedName in ipairs(Entropy.Whitelist.Players) do
+        if player.DisplayName == whitelistedName or player.Name == whitelistedName then
+            return true
+        end
+    end
+    return false
 end
 
 local function isTargetVisible(targetPart, targetCharacter)
@@ -92,6 +114,10 @@ local function getClosestPlayerToMouse()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and isPlayerAlive(player) then
             
+            if isWhitelisted(player) then
+                continue
+            end
+
             if Entropy.MouseLock.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
                 continue
             end
@@ -99,8 +125,8 @@ local function getClosestPlayerToMouse()
             local targetPart = player.Character:FindFirstChild(Entropy.MouseLock.TargetPart) or player.Character:FindFirstChild("Head")
             
             if targetPart then
-                local partPos = targetPart.Position
-                local screenPos, onScreen = Camera:WorldToScreenPoint(partPos)
+                local predictedPos = getPredictedPosition(targetPart)
+                local screenPos, onScreen = Camera:WorldToScreenPoint(predictedPos)
                 
                 if onScreen then
                     local screenPosVec = Vector2.new(screenPos.X, screenPos.Y)

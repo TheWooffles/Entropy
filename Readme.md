@@ -3,6 +3,6 @@
 
 ## Loadstring
 ```lua
-loadstring(game:HttpGet('https://gitlab.com/Wooffles/entropy/-/raw/main/Entropy'))()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/TheWooffles/Entropy/main/Entropy'))()
 ```
 ---

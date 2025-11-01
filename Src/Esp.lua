@@ -291,7 +291,7 @@ _G.ESP = {
 	end
 }
 
-print("Enhanced ESP Framework Loaded!")
+-- print("Enhanced ESP Framework Loaded!")
 -- print("Commands:")
 -- print("  _G.ESP.Toggle(false) - Disable ESP")
 -- print("  _G.ESP.SetMaxDistance(500) - Set max render distance")

@@ -67,7 +67,7 @@ end
 local function GetWeapons()
     -- Get AK47
     SafeTeleport(WeaponGivers.AK47, function()
-        print("Entropy Guns | AK47 acquired")
+        -- print("Entropy Guns | AK47 acquired")
     end)
     
     -- Wait between weapon pickups to avoid detection
@@ -75,7 +75,7 @@ local function GetWeapons()
     
     -- Uncomment to also get Remington
     SafeTeleport(WeaponGivers.Remington, function()
-        print("Entropy Guns | Remington acquired")
+        -- print("Entropy Guns | Remington acquired")
     end)
 end
 
@@ -101,7 +101,7 @@ table.insert(connections, LocalPlayer.CharacterAdded:Connect(OnCharacterAdded))
 table.insert(connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.G then
-        print("Entropy Guns | Manual weapon grab triggered")
+        -- print("Entropy Guns | Manual weapon grab triggered")
         GetWeapons()
     end
 end))
@@ -113,11 +113,11 @@ _G.UnloadRespawnGunScript = function()
     end
     connections = {}
     isTeleporting = false
-    print("Entropy Guns | Unloaded!")
+    -- print("Entropy Guns | Unloaded!")
 end
 
-print("Entropy Guns | Loaded successfully")
-print("Entropy Guns | Press 'G' to manually grab weapons")
+-- print("Entropy Guns | Loaded successfully")
+-- print("Entropy Guns | Press 'G' to manually grab weapons")
 
 local namecall
 namecall = hookmetamethod(game, "__namecall",
@@ -129,7 +129,7 @@ function(self,...)
         result.MaxAmmo = 100
         result.Range = 200
         result.Spread = 0
-        print(self," | Modded")
+        -- print(self," | Modded")
         return result
     end
     return namecall(self, ...)
