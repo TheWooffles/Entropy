@@ -172,10 +172,10 @@ Entropy.connections.InputBegan = UserInputService.InputBegan:Connect(function(in
             elseif Entropy.MouseLock.Mode == "NoFov" then
                 Entropy.drawings.Cursor.Visible = false
             end
-			print("[Vantage] :: Locked")
+			print("Entropy | Locked")
 		elseif not Entropy.MouseLock.Enabled then
 			Entropy.drawings.Cursor.Visible = false
-			print("[Vantage] :: Unlocked")
+			print("Entropy | Unlocked")
 		end
     end
 end)
