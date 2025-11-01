@@ -1,0 +1,28 @@
+if game.PlaceId == 2788229376 then
+    print("Entropy | Bypassing Anti-Cheat...")
+    --// Client Anti-Kick
+    for Key, Object in pairs(getgc(true)) do
+        if type(Object) == "table" then
+            setreadonly(Object, false)
+            local indexInstance = rawget(Object, "indexInstance")
+            if type(indexInstance) == "table" and indexInstance[1] == "kick" then
+                setreadonly(indexInstance, false)
+                rawset(Object, "Table", {"kick", function() coroutine.yield() end})
+                break
+            end
+        end
+    end
+    --// Anti-Ban
+    assert(getrawmetatable)
+    grm = getrawmetatable(game)
+    setreadonly(grm, false)
+    old = grm.__namecall
+    grm.__namecall = newcclosure(function(self, ...)
+        local args = {...}  
+        local methodName = tostring(args[1])
+        local blockedMethods = {"TeleportDetect", "CHECKER_1", "CHECKER", "GUI_CHECK", "OneMoreTime", "checkingSPEED", "BANREMOTE", "PERMAIDBAN", "KICKREMOTE", "BR_KICKPC", "BR_KICKMOBILE"}
+        if table.find(blockedMethods, methodName) then return end
+        return old(self, ...)
+    end)
+    print("Entropy | Bypassed Anti-Cheat!")
+end
