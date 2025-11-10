@@ -4,20 +4,36 @@ end
 
 local Entropy = {
     MouseLock = {
-        Enabled    = false,
-        TeamCheck  = true,
-        WallCheck  = true,
-        Keybind    = Enum.KeyCode.LeftBracket,
-        TargetPart = "Head",
-        Mode       = "Fov", -- "Fov" | "NoFov"
-        Type       = "Mouse", -- "Mouse" | "Camera"
-		Radius     = 70,
-		Smoothness = 0.3,
-        Prediction = 0,
+        Enabled     = false,
+        TeamCheck   = true,
+        WallCheck   = true,
+        Keybind     = Enum.KeyCode.LeftBracket,
+        TargetPart  = "Head",
+        Mode        = "Fov", -- "Fov" | "Target"
+        Type        = "Mouse", -- "Mouse" | "Camera"
+        Radius      = 70,
+        Smoothness  = 0.3,
+        Prediction  = 0.165,
+        JumpOffset  = 0.2,
+        TargetLock  = {
+            Enabled = false,
+            SwitchKey = Enum.KeyCode.V,
+            UnlockKey = Enum.KeyCode.X,
+            MaxTargets = 5,
+            PrioritizeDistance = true,
+            IgnoreTransparency = false,
+        },
+        Smoothing = {
+            Enabled = true,
+            Acceleration = 0.115,
+            Deceleration = 0.175,
+            MaxSpeed = 15,
+        },
     },
     Whitelist = {
         Enabled = true,
         Players = {"ggtm"}, -- Add display names here (case-sensitive)
+        Friends = false, -- Auto-whitelist friends
     },
 
 
@@ -55,16 +71,33 @@ local function isPlayerAlive(player)
     return humanoid and humanoid.Health > 0
 end
 
-local function getPredictedPosition(targetPart)
+local function getPredictedPosition(targetPart, player)
     local position = targetPart.Position
     local velocity = targetPart.AssemblyLinearVelocity or Vector3.new(0, 0, 0)
     local predictionTime = Entropy.MouseLock.Prediction
     
-    return position + (velocity * predictionTime)
+    -- Advanced prediction with jump detection
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid and humanoid.Jump then
+        position = position + Vector3.new(0, Entropy.MouseLock.JumpOffset, 0)
+    end
+    
+    -- Velocity-based prediction with acceleration
+    local acceleration = velocity - (targetPart.lastVelocity or velocity)
+    targetPart.lastVelocity = velocity
+    
+    return position + (velocity * predictionTime) + (acceleration * (predictionTime * 0.5))
 end
 
 local function isWhitelisted(player)
     if not Entropy.Whitelist.Enabled then return false end
+    
+    -- Check friends if enabled
+    if Entropy.Whitelist.Friends and player:IsFriendsWith(LocalPlayer.UserId) then
+        return true
+    end
+    
+    -- Check whitelist
     for _, whitelistedName in ipairs(Entropy.Whitelist.Players) do
         if player.DisplayName == whitelistedName or player.Name == whitelistedName then
             return true
@@ -72,6 +105,94 @@ local function isWhitelisted(player)
     end
     return false
 end
+
+-- Smooth movement with acceleration/deceleration
+local smoothing = {
+    currentSpeed = Vector2.new(),
+    targetSpeed = Vector2.new(),
+    lastDelta = Vector2.new(),
+}
+
+local function smoothAim(current, target)
+    if not Entropy.MouseLock.Smoothing.Enabled then
+        return target
+    end
+    
+    local delta = target - current
+    local acceleration = Entropy.MouseLock.Smoothing.Acceleration
+    local deceleration = Entropy.MouseLock.Smoothing.Deceleration
+    local maxSpeed = Entropy.MouseLock.Smoothing.MaxSpeed
+    
+    -- Update target speed
+    smoothing.targetSpeed = delta.Unit * math.min(delta.Magnitude, maxSpeed)
+    
+    -- Apply acceleration/deceleration
+    local speedDelta = smoothing.targetSpeed - smoothing.currentSpeed
+    if speedDelta.Magnitude > 0 then
+        smoothing.currentSpeed = smoothing.currentSpeed + speedDelta.Unit * math.min(speedDelta.Magnitude, acceleration)
+    else
+        smoothing.currentSpeed = smoothing.currentSpeed:Lerp(Vector2.new(), deceleration)
+    end
+    
+    return current + smoothing.currentSpeed
+end
+
+-- Target management for lock mode
+local targetManager = {
+    targets = {},
+    currentIndex = 1,
+    lastSwitch = 0,
+    
+    addTarget = function(self, player)
+        if #self.targets >= Entropy.MouseLock.TargetLock.MaxTargets then return end
+        table.insert(self.targets, player)
+        self:sortTargets()
+    end,
+    
+    removeTarget = function(self, player)
+        for i, target in ipairs(self.targets) do
+            if target == player then
+                table.remove(self.targets, i)
+                if self.currentIndex > #self.targets then
+                    self.currentIndex = 1
+                end
+                break
+            end
+        end
+    end,
+    
+    getCurrentTarget = function(self)
+        return self.targets[self.currentIndex]
+    end,
+    
+    switchTarget = function(self)
+        if #self.targets == 0 then return end
+        if tick() - self.lastSwitch < 0.2 then return end -- Prevent too rapid switching
+        
+        self.currentIndex = self.currentIndex % #self.targets + 1
+        self.lastSwitch = tick()
+        return self.targets[self.currentIndex]
+    end,
+    
+    sortTargets = function(self)
+        if Entropy.MouseLock.TargetLock.PrioritizeDistance then
+            table.sort(self.targets, function(a, b)
+                if not a.Character or not b.Character then return false end
+                local aRoot = a.Character:FindFirstChild("HumanoidRootPart")
+                local bRoot = b.Character:FindFirstChild("HumanoidRootPart")
+                if not aRoot or not bRoot then return false end
+                
+                return (aRoot.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <
+                       (bRoot.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            end)
+        end
+    end,
+    
+    clear = function(self)
+        self.targets = {}
+        self.currentIndex = 1
+    end
+}
 
 local function isTargetVisible(targetPart, targetCharacter)
     if not Entropy.MouseLock.WallCheck then
@@ -104,40 +225,53 @@ end
 
 local function getClosestPlayerToMouse()
     local closestPlayer = nil
-	if Entropy.MouseLock.Mode == "Fov" then
-    	shortestDistance = Entropy.MouseLock.Radius
-	elseif Entropy.MouseLock.Mode == "NoFov" then
-		shortestDistance = math.huge
-	end
-		
+    local shortestDistance = (Entropy.MouseLock.Mode == "Fov") and Entropy.MouseLock.Radius or math.huge
+    
+    -- If in target lock mode and we have a current target, prioritize them
+    if Entropy.MouseLock.Mode == "Target" and Entropy.MouseLock.TargetLock.Enabled then
+        local currentTarget = targetManager:getCurrentTarget()
+        if currentTarget and isPlayerAlive(currentTarget) and not isWhitelisted(currentTarget) then
+            return currentTarget
+        end
+    end
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and isPlayerAlive(player) then
-            
-            if isWhitelisted(player) then
-                continue
-            end
-
-            if Entropy.MouseLock.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
-                continue
-            end
+            if isWhitelisted(player) then continue end
+            if Entropy.MouseLock.TeamCheck and player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then continue end
             
             local targetPart = player.Character:FindFirstChild(Entropy.MouseLock.TargetPart) or player.Character:FindFirstChild("Head")
+            if not targetPart then continue end
             
-            if targetPart then
-                local predictedPos = getPredictedPosition(targetPart)
-                local screenPos, onScreen = Camera:WorldToScreenPoint(predictedPos)
+            -- Visibility check with transparency handling
+            if not Entropy.MouseLock.TargetLock.IgnoreTransparency then
+                local transparent = false
+                for _, part in pairs(player.Character:GetDescendants()) do
+                    if part:IsA("BasePart") and part.Transparency > 0.9 then
+                        transparent = true
+                        break
+                    end
+                end
+                if transparent then continue end
+            end
+            
+            local predictedPos = getPredictedPosition(targetPart, player)
+            local screenPos, onScreen = Camera:WorldToScreenPoint(predictedPos)
+            
+            if onScreen then
+                local screenPosVec = Vector2.new(screenPos.X, screenPos.Y)
+                local mousePos = Vector2.new(LocalPlayer:GetMouse().X, LocalPlayer:GetMouse().Y)
+                local distanceFromMouse = (mousePos - screenPosVec).Magnitude
                 
-                if onScreen then
-                    local screenPosVec = Vector2.new(screenPos.X, screenPos.Y)
-					MousePos = Vector2.new(LocalPlayer:GetMouse().X, LocalPlayer:GetMouse().Y)
-                    local distanceFromMouse = (MousePos - screenPosVec).Magnitude
+                if isTargetVisible(targetPart, player.Character) then
+                    -- In Target mode, add valid targets to the manager
+                    if Entropy.MouseLock.Mode == "Target" then
+                        targetManager:addTarget(player)
+                    end
                     
-                    if isTargetVisible(targetPart, player.Character) then
-                        if distanceFromMouse < shortestDistance then
-                            shortestDistance = distanceFromMouse
-                            closestPlayer = player
-                        end
+                    if distanceFromMouse < shortestDistance then
+                        shortestDistance = distanceFromMouse
+                        closestPlayer = player
                     end
                 end
             end
@@ -147,66 +281,136 @@ local function getClosestPlayerToMouse()
     return closestPlayer
 end
 
+local lastFrameTime = tick()
+local frameDelta = 0
+
 Entropy.connections.MouseLock = RunService.RenderStepped:Connect(function()
+    -- Delta time calculation for smooth animations
+    local currentTime = tick()
+    frameDelta = currentTime - lastFrameTime
+    lastFrameTime = currentTime
+    
+    -- Update FOV circle
     Entropy.drawings.Cursor.Radius = Entropy.MouseLock.Radius
     Entropy.drawings.Cursor.Position = Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
+    
+    -- Clear target if local player dies
     if not isPlayerAlive(LocalPlayer) then
         targetPlayer = nil
+        targetManager:clear()
+        return
     end
     
     if Entropy.MouseLock.Enabled then
         local newTarget = getClosestPlayerToMouse()
         
-        if newTarget and newTarget ~= targetPlayer then
-            targetPlayer = newTarget
-        elseif not newTarget and targetPlayer then
-            targetPlayer = nil
+        -- Target management
+        if Entropy.MouseLock.Mode == "Target" then
+            if newTarget and not table.find(targetManager.targets, newTarget) then
+                targetManager:addTarget(newTarget)
+            end
+            newTarget = targetManager:getCurrentTarget()
         end
         
+        -- Update current target
+        if newTarget and newTarget ~= targetPlayer then
+            targetPlayer = newTarget
+            -- Reset smoothing when switching targets
+            smoothing.currentSpeed = Vector2.new()
+            smoothing.lastDelta = Vector2.new()
+        elseif not newTarget and targetPlayer then
+            targetPlayer = nil
+            targetManager:clear()
+        end
+        
+        -- Aim at target
         if targetPlayer and targetPlayer.Character then
             local targetPart = targetPlayer.Character:FindFirstChild(Entropy.MouseLock.TargetPart) or targetPlayer.Character:FindFirstChild("Head")
             
             if targetPart then
-                local partPos = targetPart.Position
-                local screenPos, onScreen = Camera:WorldToScreenPoint(partPos)
+                local predictedPos = getPredictedPosition(targetPart, targetPlayer)
+                local screenPos, onScreen = Camera:WorldToScreenPoint(predictedPos)
+                
                 if onScreen then
                     local mousePos = Vector2.new(LocalPlayer:GetMouse().X, LocalPlayer:GetMouse().Y)
                     local targetPos = Vector2.new(screenPos.X, screenPos.Y)
-					local Pos
-					if Entropy.MouseLock.Smoothness == 1 then
-						Pos = Vector2.new(screenPos.X, screenPos.Y)
-					elseif Entropy.MouseLock.Smoothness < 1 then
-						Pos = mousePos:Lerp(targetPos, math.clamp(Entropy.MouseLock.Smoothness, 0, 1))
-					end
-                    local delta = Pos - mousePos
+                    local finalPos
+                    
+                    -- Apply smoothing based on mode and settings
+                    if Entropy.MouseLock.Mode == "Target" then
+                        -- Target mode uses advanced smoothing with acceleration
+                        finalPos = smoothAim(mousePos, targetPos)
+                    else
+                        -- FOV mode uses simple lerp smoothing
+                        if Entropy.MouseLock.Smoothness == 1 then
+                            finalPos = targetPos
+                        else
+                            finalPos = mousePos:Lerp(targetPos, math.clamp(Entropy.MouseLock.Smoothness, 0, 1))
+                        end
+                    end
+                    
+                    -- Apply mouse movement
+                    local delta = finalPos - mousePos
                     mousemoverel(delta.X, delta.Y)
+                    
+                    -- Update visual feedback (you could add hit markers, target indicators etc. here)
+                    if Entropy.MouseLock.Mode == "Target" then
+                        Entropy.drawings.Cursor.Color = Color3.fromRGB(255, 50, 50)
+                    else
+                        Entropy.drawings.Cursor.Color = Color3.fromRGB(255, 255, 255)
+                    end
                 end
             end
         end
     else
         targetPlayer = nil
+        targetManager:clear()
     end
 end)
 
 Entropy.connections.InputBegan = UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
+    
+    -- Main toggle
     if input.KeyCode == Entropy.MouseLock.Keybind then
         Entropy.MouseLock.Enabled = not Entropy.MouseLock.Enabled
-		if Entropy.MouseLock.Enabled then
+        
+        if Entropy.MouseLock.Enabled then
+            -- Show/hide cursor based on mode
             if Entropy.MouseLock.Mode == "Fov" then
                 Entropy.drawings.Cursor.Visible = true
-            elseif Entropy.MouseLock.Mode == "NoFov" then
-                Entropy.drawings.Cursor.Visible = false
+            elseif Entropy.MouseLock.Mode == "Target" then
+                Entropy.drawings.Cursor.Visible = Entropy.MouseLock.TargetLock.Enabled
             end
-			print("Entropy | Locked")
-		elseif not Entropy.MouseLock.Enabled then
-			Entropy.drawings.Cursor.Visible = false
-			print("Entropy | Unlocked")
-		end
+            print("Entropy | Locked (" .. Entropy.MouseLock.Mode .. " Mode)")
+        else
+            Entropy.drawings.Cursor.Visible = false
+            targetManager:clear()
+            print("Entropy | Unlocked")
+        end
+    end
+    
+    -- Target lock controls (only in Target mode)
+    if Entropy.MouseLock.Mode == "Target" and Entropy.MouseLock.Enabled then
+        -- Target switching
+        if input.KeyCode == Entropy.MouseLock.TargetLock.SwitchKey then
+            local newTarget = targetManager:switchTarget()
+            if newTarget then
+                print("Entropy | Switched target to: " .. newTarget.Name)
+            end
+        end
+        
+        -- Target unlock
+        if input.KeyCode == Entropy.MouseLock.TargetLock.UnlockKey then
+            targetManager:clear()
+            targetPlayer = nil
+            print("Entropy | Target cleared")
+        end
     end
 end)
 
 _G.UnloadEntropy = function()
+    _G.ESP.Unload()
     for _, connection in pairs(Entropy.connections) do
         connection:Disconnect()
     end
